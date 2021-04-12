@@ -290,6 +290,26 @@ type ubuntuTemplateData struct {
 	GCCVersion           string
 }
 
+const ubuntuTemplate = `#!/bin/bash
+rm -Rf {{ .DriverBuildDir }}
+mkdir {{ .DriverBuildDir }}
+
+cd {{ .DriverBuildDir }}
+
+{{range $url := .KernelDownloadURLS}}
+curl --silent -o kernel.deb -SL {{ $url }}
+ar x kernel.deb
+tar -xf data.tar.*
+{{end}}
+
+cd /tracee
+
+KERN_HEADERS={{ .DriverBuildDir }}/usr/src/{{ .KernelHeadersPattern }} KERN_RELEASE=generic make bpf
+
+rm -Rf {{ .DriverBuildDir }}
+`
+
+/*
 const ubuntuTemplate = `
 #!/bin/bash
 set -xeuo pipefail
@@ -300,7 +320,7 @@ rm -Rf /tmp/module-download
 mkdir -p /tmp/module-download
 
 curl --silent -SL {{ .ModuleDownloadURL }} | tar -xzf - -C /tmp/module-download
-mv /tmp/module-download/*/driver/* {{ .DriverBuildDir }}
+mv /tmp/module-download//driver/* {{ .DriverBuildDir }}
 
 cp /driverkit/module-Makefile {{ .DriverBuildDir }}/Makefile
 cp /driverkit/module-driver-config.h {{ .DriverBuildDir }}/driver_config.h
@@ -339,6 +359,7 @@ make LLC=/usr/bin/llc-7 CLANG=/usr/bin/clang-7 CC=/usr/bin/gcc-8 KERNELDIR=$sour
 ls -l probe.o
 {{ end }}
 `
+*/
 
 func ubuntuGCCVersionFromKernelRelease(kr kernelrelease.KernelRelease) string {
 	switch kr.Version {
