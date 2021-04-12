@@ -2,6 +2,6 @@ kernelrelease: 5.4.0-51-generic
 kernelversion: 56
 target: ubuntu-generic
 output:
-  probe: dist/falco-ubuntu-generic.o
+  probe: dist/tracee-ubuntu-generic.o
 driverversion: dev
 timeout: 120
