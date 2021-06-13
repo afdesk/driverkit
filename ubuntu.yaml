@@ -1,0 +1,7 @@
+kernelrelease: 5.4.0-51-generic
+kernelversion: 56
+target: ubuntu-generic
+output:
+  probe: dist/tracee-ubuntu-generic.o
+driverversion: dev
+timeout: 120

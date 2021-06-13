@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -73,24 +72,27 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	}
 
 	// Prepare driver config template
-	bufDriverConfig := bytes.NewBuffer(nil)
-	err = renderDriverConfig(bufDriverConfig, driverConfigData{DriverVersion: c.DriverVersion, DriverName: c.DriverName, DeviceName: c.DeviceName})
-	if err != nil {
-		return err
-	}
+	/*
+		bufDriverConfig := bytes.NewBuffer(nil)
+		err = renderDriverConfig(bufDriverConfig, driverConfigData{DriverVersion: c.DriverVersion, DriverName: c.DriverName, DeviceName: c.DeviceName})
+		if err != nil {
+			return err
+		}
+	*/
 
 	// Prepare makefile template
-	bufMakefile := bytes.NewBuffer(nil)
-	err = renderMakefile(bufMakefile, makefileData{ModuleName: c.DriverName, ModuleBuildDir: builder.DriverDirectory})
-	if err != nil {
-		return err
-	}
+	/*
+		bufMakefile := bytes.NewBuffer(nil)
+		err = renderMakefile(bufMakefile, makefileData{ModuleName: c.DriverName, ModuleBuildDir: builder.DriverDirectory})
+		if err != nil {
+			return err
+		}
 
-	configDecoded, err := base64.StdEncoding.DecodeString(b.KernelConfigData)
-	if err != nil {
-		return err
-	}
-
+		configDecoded, err := base64.StdEncoding.DecodeString(b.KernelConfigData)
+		if err != nil {
+			return err
+		}
+	*/
 	// Create the container
 	ctx := context.Background()
 	ctx = signals.WithStandardSignals(ctx)
@@ -115,11 +117,11 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	}
 
 	hostCfg := &container.HostConfig{
-		AutoRemove: true,
+		AutoRemove: false,
 	}
 	networkCfg := &network.NetworkingConfig{}
 	uid := uuid.NewUUID()
-	name := fmt.Sprintf("driverkit-%s", string(uid))
+	name := fmt.Sprintf("tracee-%s", string(uid))
 	cdata, err := cli.ContainerCreate(ctx, containerCfg, hostCfg, networkCfg, name)
 	if err != nil {
 		return err
@@ -140,14 +142,9 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	if err != nil {
 		return err
 	}
-
 	files := []dockerCopyFile{
-		{"/driverkit/driverkit.sh", res},
-		{"/driverkit/kernel.config", string(configDecoded)},
-		{"/driverkit/module-Makefile", bufMakefile.String()},
-		{"/driverkit/module-driver-config.h", bufDriverConfig.String()},
+		{"/tracee/exec.sh", res},
 	}
-
 	var buf bytes.Buffer
 	err = tarWriterFiles(&buf, files)
 	if err != nil {
@@ -180,7 +177,7 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 		Env:          envs,
 		Cmd: []string{
 			"/bin/bash",
-			"/driverkit/driverkit.sh",
+			"/tracee/exec.sh",
 		},
 	})
 
@@ -204,7 +201,7 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	}
 
 	if len(b.ProbeFilePath) > 0 {
-		if err := copyFromContainer(ctx, cli, cdata.ID, builder.FalcoProbeFullPath, b.ProbeFilePath); err != nil {
+		if err := copyFromContainer(ctx, cli, cdata.ID, "/tracee/dist/tracee.bpf.generic.0.o", b.ProbeFilePath); err != nil {
 			return err
 		}
 		logrus.WithField("path", b.ProbeFilePath).Info("eBPF probe available")
