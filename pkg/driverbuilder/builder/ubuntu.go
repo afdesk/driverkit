@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"text/template"
@@ -30,6 +31,12 @@ type ubuntuGeneric struct {
 // Script compiles the script to build the kernel module and/or the eBPF probe.
 func (v ubuntuGeneric) Script(c Config) (string, error) {
 	t := template.New(string(TargetTypeUbuntuGeneric))
+
+	ubuntuTemplate := ubuntuTemplateFalco
+	if os.Getenv("DRIVERKIT_BUILDER_TYPE") == "tracee" {
+		ubuntuTemplate = ubuntuTemplateTracee
+	}
+
 	parsed, err := t.Parse(ubuntuTemplate)
 	if err != nil {
 		return "", err
@@ -72,6 +79,10 @@ type ubuntuAWS struct {
 // Script compiles the script to build the kernel module and/or the eBPF probe.
 func (v ubuntuAWS) Script(c Config) (string, error) {
 	t := template.New(string(TargetTypeUbuntuGeneric))
+	ubuntuTemplate := ubuntuTemplateFalco
+	if os.Getenv("DRIVERKIT_BUILDER_TYPE") == "tracee" {
+		ubuntuTemplate = ubuntuTemplateTracee
+	}
 	parsed, err := t.Parse(ubuntuTemplate)
 	if err != nil {
 		return "", err
@@ -290,7 +301,20 @@ type ubuntuTemplateData struct {
 	GCCVersion           string
 }
 
-const ubuntuTemplate = `
+const ubuntuTemplateTracee = `#!/bin/bash
+rm -Rf {{ .DriverBuildDir }}
+mkdir {{ .DriverBuildDir }}
+cd {{ .DriverBuildDir }}
+{{range $url := .KernelDownloadURLS}}
+curl --silent -o kernel.deb -SL {{ $url }}
+ar x kernel.deb
+tar -xf data.tar.*
+{{end}}
+cd /tracee
+KERN_HEADERS={{ .DriverBuildDir }}/usr/src/{{ .KernelHeadersPattern }} KERN_RELEASE=generic make bpf
+rm -Rf {{ .DriverBuildDir }}`
+
+const ubuntuTemplateFalco = `
 #!/bin/bash
 set -xeuo pipefail
 

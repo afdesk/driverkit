@@ -54,50 +54,68 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 		return err
 	}
 
+	driverName := "falco"
+	deviceName := "falco"
+	builderImage := builderBaseImage
+
+	isDefault := true
+
+	if os.Getenv("DRIVERKIT_BUILDER_TYPE") == "tracee" {
+		isDefault = false
+		driverName = "tracee"
+		deviceName = "tracee"
+		builderImage = builderTraceeImage
+	}
 	// create a builder based on the choosen build type
 	v, err := builder.Factory(b.TargetType)
 	if err != nil {
 		return err
 	}
 	c := builder.Config{
-		DriverName:      "falco",
-		DeviceName:      "falco",
+		DriverName:      driverName,
+		DeviceName:      deviceName,
 		DownloadBaseURL: "https://github.com/falcosecurity/libs/archive",
 		Build:           b,
 	}
-
 	// Generate the build script from the builder
 	res, err := v.Script(c)
 	if err != nil {
 		return err
 	}
-
-	// Prepare driver config template
-	bufDriverConfig := bytes.NewBuffer(nil)
-	err = renderDriverConfig(bufDriverConfig, driverConfigData{DriverVersion: c.DriverVersion, DriverName: c.DriverName, DeviceName: c.DeviceName})
-	if err != nil {
-		return err
+	files := []dockerCopyFile{
+		{"/driverkit/driverkit.sh", res},
 	}
 
-	// Prepare makefile template
-	bufMakefile := bytes.NewBuffer(nil)
-	err = renderMakefile(bufMakefile, makefileData{ModuleName: c.DriverName, ModuleBuildDir: builder.DriverDirectory})
-	if err != nil {
-		return err
-	}
+	if isDefault {
+		// Prepare driver config template
+		bufDriverConfig := bytes.NewBuffer(nil)
+		err = renderDriverConfig(bufDriverConfig, driverConfigData{DriverVersion: c.DriverVersion, DriverName: c.DriverName, DeviceName: c.DeviceName})
+		if err != nil {
+			return err
+		}
+		files = append(files, dockerCopyFile{"/driverkit/module-driver-config.h", bufDriverConfig.String()})
 
-	configDecoded, err := base64.StdEncoding.DecodeString(b.KernelConfigData)
-	if err != nil {
-		return err
-	}
+		// Prepare makefile template
+		bufMakefile := bytes.NewBuffer(nil)
+		err = renderMakefile(bufMakefile, makefileData{ModuleName: c.DriverName, ModuleBuildDir: builder.DriverDirectory})
+		if err != nil {
+			return err
+		}
+		files = append(files, dockerCopyFile{"/driverkit/module-Makefile", bufMakefile.String()})
 
+		configDecoded, err := base64.StdEncoding.DecodeString(b.KernelConfigData)
+		if err != nil {
+			return err
+		}
+		files = append(files, dockerCopyFile{"/driverkit/kernel.config", string(configDecoded)})
+	}
 	// Create the container
 	ctx := context.Background()
 	ctx = signals.WithStandardSignals(ctx)
 
-	if _, _, err = cli.ImageInspectWithRaw(ctx, builderBaseImage); client.IsErrNotFound(err) {
-		logger.WithField("image", builderBaseImage).Debug("pulling builder image")
-		pullRes, err := cli.ImagePull(ctx, builderBaseImage, types.ImagePullOptions{})
+	if _, _, err = cli.ImageInspectWithRaw(ctx, builderImage); client.IsErrNotFound(err) {
+		logger.WithField("image", builderImage).Debug("pulling builder image")
+		pullRes, err := cli.ImagePull(ctx, builderImage, types.ImagePullOptions{})
 		if err != nil {
 			return err
 		}
@@ -111,7 +129,7 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	containerCfg := &container.Config{
 		Tty:   true,
 		Cmd:   []string{"/bin/sleep", strconv.Itoa(bp.timeout)},
-		Image: builderBaseImage,
+		Image: builderImage,
 	}
 
 	hostCfg := &container.HostConfig{
@@ -139,13 +157,6 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	err = cli.ContainerStart(ctx, cdata.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return err
-	}
-
-	files := []dockerCopyFile{
-		{"/driverkit/driverkit.sh", res},
-		{"/driverkit/kernel.config", string(configDecoded)},
-		{"/driverkit/module-Makefile", bufMakefile.String()},
-		{"/driverkit/module-driver-config.h", bufDriverConfig.String()},
 	}
 
 	var buf bytes.Buffer
@@ -204,6 +215,9 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	}
 
 	if len(b.ProbeFilePath) > 0 {
+		if !isDefault {
+			builder.FalcoProbeFullPath = "/tracee/dist/tracee.bpf.generic.0.o"
+		}
 		if err := copyFromContainer(ctx, cli, cdata.ID, builder.FalcoProbeFullPath, b.ProbeFilePath); err != nil {
 			return err
 		}
