@@ -8,7 +8,6 @@ type BuildArchitecture string
 
 const BuildArchitectureX86_64 BuildArchitecture = "x86_64"
 
-const builderTraceeImage = "aquasec/tracee-ebpf-builder:latest"
 var builderBaseImage = "falcosecurity/driverkit-builder:latest" // This is overwritten when using the Makefile to build
 
 func (ba BuildArchitecture) String() string {

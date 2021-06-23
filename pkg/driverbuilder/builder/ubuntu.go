@@ -33,7 +33,7 @@ func (v ubuntuGeneric) Script(c Config) (string, error) {
 	t := template.New(string(TargetTypeUbuntuGeneric))
 
 	ubuntuTemplate := ubuntuTemplateFalco
-	if os.Getenv("DRIVERKIT_BUILDER_TYPE") == "tracee" {
+	if os.Getenv("DRIVERKIT_BUILDER_IMAGE") != "" {
 		ubuntuTemplate = ubuntuTemplateTracee
 	}
 
@@ -80,7 +80,7 @@ type ubuntuAWS struct {
 func (v ubuntuAWS) Script(c Config) (string, error) {
 	t := template.New(string(TargetTypeUbuntuGeneric))
 	ubuntuTemplate := ubuntuTemplateFalco
-	if os.Getenv("DRIVERKIT_BUILDER_TYPE") == "tracee" {
+	if os.Getenv("DRIVERKIT_BUILDER_IMAGE") != "" {
 		ubuntuTemplate = ubuntuTemplateTracee
 	}
 	parsed, err := t.Parse(ubuntuTemplate)
@@ -301,10 +301,12 @@ type ubuntuTemplateData struct {
 	GCCVersion           string
 }
 
-const ubuntuTemplateTracee = `#!/bin/bash
+const ubuntuTemplateTracee = `
+#!/bin/bash
 rm -Rf {{ .DriverBuildDir }}
 mkdir {{ .DriverBuildDir }}
 cd {{ .DriverBuildDir }}
+mkdir bpf
 {{range $url := .KernelDownloadURLS}}
 curl --silent -o kernel.deb -SL {{ $url }}
 ar x kernel.deb
@@ -312,7 +314,7 @@ tar -xf data.tar.*
 {{end}}
 cd /tracee
 KERN_HEADERS={{ .DriverBuildDir }}/usr/src/{{ .KernelHeadersPattern }} KERN_RELEASE=generic make bpf
-rm -Rf {{ .DriverBuildDir }}`
+cp /tracee/dist/tracee.bpf.generic.0.o /tmp/driver/bpf/probe.o`
 
 const ubuntuTemplateFalco = `
 #!/bin/bash

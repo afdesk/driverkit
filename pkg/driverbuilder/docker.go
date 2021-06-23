@@ -60,11 +60,11 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 
 	isDefault := true
 
-	if os.Getenv("DRIVERKIT_BUILDER_TYPE") == "tracee" {
+	if os.Getenv("DRIVERKIT_BUILDER_IMAGE") != "" {
 		isDefault = false
-		driverName = "tracee"
-		deviceName = "tracee"
-		builderImage = builderTraceeImage
+		driverName = "custom"
+		deviceName = "custom"
+		builderImage = os.Getenv("DRIVERKIT_BUILDER_IMAGE")
 	}
 	// create a builder based on the choosen build type
 	v, err := builder.Factory(b.TargetType)
@@ -133,7 +133,7 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	}
 
 	hostCfg := &container.HostConfig{
-		AutoRemove: true,
+		AutoRemove: false,
 	}
 	networkCfg := &network.NetworkingConfig{}
 	uid := uuid.NewUUID()
@@ -215,9 +215,6 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	}
 
 	if len(b.ProbeFilePath) > 0 {
-		if !isDefault {
-			builder.FalcoProbeFullPath = "/tracee/dist/tracee.bpf.generic.0.o"
-		}
 		if err := copyFromContainer(ctx, cli, cdata.ID, builder.FalcoProbeFullPath, b.ProbeFilePath); err != nil {
 			return err
 		}
