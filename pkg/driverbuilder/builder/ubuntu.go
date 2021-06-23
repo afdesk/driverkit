@@ -30,14 +30,12 @@ type ubuntuGeneric struct {
 
 // Script compiles the script to build the kernel module and/or the eBPF probe.
 func (v ubuntuGeneric) Script(c Config) (string, error) {
-	t := template.New(string(TargetTypeUbuntuGeneric))
-
-	ubuntuTemplate := ubuntuTemplateFalco
-	if os.Getenv("DRIVERKIT_BUILDER_IMAGE") != "" {
-		ubuntuTemplate = ubuntuTemplateTracee
+	sh, err := getUbuntuShellTemplate()
+	if err != nil {
+		return "", err
 	}
-
-	parsed, err := t.Parse(ubuntuTemplate)
+	t := template.New(string(TargetTypeUbuntuGeneric))
+	parsed, err := t.Parse(sh)
 	if err != nil {
 		return "", err
 	}
@@ -78,12 +76,12 @@ type ubuntuAWS struct {
 
 // Script compiles the script to build the kernel module and/or the eBPF probe.
 func (v ubuntuAWS) Script(c Config) (string, error) {
-	t := template.New(string(TargetTypeUbuntuGeneric))
-	ubuntuTemplate := ubuntuTemplateFalco
-	if os.Getenv("DRIVERKIT_BUILDER_IMAGE") != "" {
-		ubuntuTemplate = ubuntuTemplateTracee
+	sh, err := getUbuntuShellTemplate()
+	if err != nil {
+		return "", err
 	}
-	parsed, err := t.Parse(ubuntuTemplate)
+	t := template.New(string(TargetTypeUbuntuGeneric))
+	parsed, err := t.Parse(sh)
 	if err != nil {
 		return "", err
 	}
@@ -301,22 +299,18 @@ type ubuntuTemplateData struct {
 	GCCVersion           string
 }
 
-const ubuntuTemplateTracee = `
-#!/bin/bash
-rm -Rf {{ .DriverBuildDir }}
-mkdir {{ .DriverBuildDir }}
-cd {{ .DriverBuildDir }}
-mkdir bpf
-{{range $url := .KernelDownloadURLS}}
-curl --silent -o kernel.deb -SL {{ $url }}
-ar x kernel.deb
-tar -xf data.tar.*
-{{end}}
-cd /tracee
-KERN_HEADERS={{ .DriverBuildDir }}/usr/src/{{ .KernelHeadersPattern }} KERN_RELEASE=generic make bpf
-cp /tracee/dist/tracee.bpf.generic.0.o /tmp/driver/bpf/probe.o`
+func getUbuntuShellTemplate() (string, error) {
+	if os.Getenv("DRIVERKIT_UBUNTU_TEMPLATE_PATH") != "" {
+		tmpl, err := ioutil.ReadFile(os.Getenv("DRIVERKIT_UBUNTU_TEMPLATE_PATH"))
+		if err != nil {
+			return "", err
+		}
+		return string(tmpl), nil
+	}
+	return ubuntuTemplate, nil
+}
 
-const ubuntuTemplateFalco = `
+const ubuntuTemplate = `
 #!/bin/bash
 set -xeuo pipefail
 
