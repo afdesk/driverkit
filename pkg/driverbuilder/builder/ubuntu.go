@@ -40,11 +40,20 @@ func (v ubuntuGeneric) Script(c Config) (string, error) {
 		return "", err
 	}
 
-	kr := kernelrelease.FromString(c.Build.KernelRelease)
+	urls := []string{}
+	var kr kernelrelease.KernelRelease
 
-	urls, err := ubuntuGenericHeadersURLFromRelease(kr, c.Build.KernelVersion)
-	if len(urls) != 2 {
-		return "", fmt.Errorf("specific kernel headers not found")
+	if os.Getenv("DRIVERKIT_HEADERS_FROM_MAINLINE") == "" {
+		kr = kernelrelease.FromString(c.Build.KernelRelease)
+		urls, err = ubuntuGenericHeadersURLFromRelease(kr, c.Build.KernelVersion)
+		if len(urls) != 2 {
+			return "", fmt.Errorf("specific kernel headers not found")
+		}
+	} else {
+		urls, kr, err = ubuntuGenericHeadersURLFromMainline(c.Build.KernelRelease)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	td := ubuntuTemplateData{
