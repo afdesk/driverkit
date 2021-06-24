@@ -55,24 +55,21 @@ func getArchFromAll(in string) string {
 	return ""
 }
 
-func getCode(version, major, minor, specific string) string {
-	v, _ := strconv.Atoi(version)
-	mj, _ := strconv.Atoi(major)
-	mi, _ := strconv.Atoi(minor)
-	return fmt.Sprintf("%02d%02d%02d%s", v, mj, mi, specific)
-}
-
 func genCurrentLink(v *ubuntuMainlineVersion, patch, arch string) (link string, dir string) {
 	isArch := ""
 	if arch != "" {
 		isArch = "/"
 	}
-	code := getCode(v.KernelVersion, v.MajorVersion, v.MinorVersion, v.SpecificAdditional)
+	vers, _ := strconv.Atoi(v.KernelVersion)
+	mj, _ := strconv.Atoi(v.MajorVersion)
+	mi, _ := strconv.Atoi(v.MinorVersion)
 
-	dir = fmt.Sprintf("linux-headers-%s.%s.%s-%s-generic", v.KernelVersion, v.MajorVersion, v.MinorVersion, code)
+	code := fmt.Sprintf("%02d%02d%02d%s", vers, mj, mi, v.SpecificAdditional)
 
-	link = fmt.Sprintf("%s%slinux-headers-%s.%s.%s-%s-generic_%[3]s.%[4]s.%[5]s-%[6]s.%s_amd64.deb",
-		arch, isArch, v.KernelVersion, v.MajorVersion, v.MinorVersion, code, patch)
+	dir = fmt.Sprintf("linux-headers-%s.%s.%d-%s-generic", v.KernelVersion, v.MajorVersion, mi, code)
+
+	link = fmt.Sprintf("%s%slinux-headers-%s.%s.%d-%s-generic_%[3]s.%[4]s.%[5]d-%[6]s.%s_amd64.deb",
+		arch, isArch, v.KernelVersion, v.MajorVersion, mi, code, patch)
 	return
 }
 func fetchLinks(v *ubuntuMainlineVersion) (linkAll string, linkCurrent string, dir string, err error) {
