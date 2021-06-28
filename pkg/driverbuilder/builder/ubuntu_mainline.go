@@ -10,12 +10,59 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 )
 
 const mainlineUrl = "http://kernel.ubuntu.com/~kernel-ppa/mainline/v"
 
 var errFailedKernelRelease = errors.New("failed kernel release for ubuntu mainline")
 var errFailedDownloadLink = errors.New("failed download link from ubuntu mainline")
+
+const shellMainlineTemplate = `#!/bin/bash
+rm -Rf {{ .DriverBuildDir }}
+mkdir {{ .DriverBuildDir }}
+cd {{ .DriverBuildDir }}
+mkdir bpf
+{{range $url := .KernelDownloadURLS}}
+curl --silent -o kernel.deb -SL {{ $url }}
+ar x kernel.deb
+tar -xf data.tar.*
+{{end}}
+cd /tracee
+KERN_HEADERS={{ .DriverBuildDir }}/usr/src/{{ .KernelHeadersPattern }} KERN_RELEASE=generic make bpf
+cp /tracee/dist/tracee.bpf.generic.0.o /tmp/driver/bpf/probe.o`
+
+type ubuntuMainline struct {}
+
+func (ubnt *ubuntuMainline) Script(c Config) (string, error) {
+	t := template.New(string(TargetTypeUbuntuGeneric))
+	parsed, err := t.Parse(shellMainlineTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	urls, kr, err := ubuntuGenericHeadersURLFromMainline(c.Build.KernelRelease)
+	if err != nil {
+		return "", err
+	}
+
+	td := ubuntuTemplateData{
+		DriverBuildDir:       DriverDirectory,
+		ModuleDownloadURL:    fmt.Sprintf("%s/%s.tar.gz", c.DownloadBaseURL, c.Build.DriverVersion),
+		KernelDownloadURLS:   urls,
+		KernelLocalVersion:   kr.FullExtraversion,
+		KernelHeadersPattern: "linux-headers*generic",
+		BuildModule:          len(c.Build.ModuleFilePath) > 0,
+		BuildProbe:           len(c.Build.ProbeFilePath) > 0,
+		GCCVersion:           ubuntuGCCVersionFromKernelRelease(kr),
+	}
+	buf := bytes.NewBuffer(nil)
+	err = parsed.Execute(buf, td)
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
 
 type ubuntuMainlineVersion struct {
 	KernelRelease      string

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"text/template"
@@ -19,9 +18,13 @@ const TargetTypeUbuntuGeneric Type = "ubuntu-generic"
 // TargetTypeUbuntuAWS identifies the UbuntuAWS target.
 const TargetTypeUbuntuAWS Type = "ubuntu-aws"
 
+// TargetTypeUbuntuMainline identifies the UbuntuAWS target.
+const TargetTypeUbuntuMainline Type = "ubuntu-mainline"
+
 func init() {
 	BuilderByTarget[TargetTypeUbuntuGeneric] = &ubuntuGeneric{}
 	BuilderByTarget[TargetTypeUbuntuAWS] = &ubuntuAWS{}
+	BuilderByTarget[TargetTypeUbuntuMainline] = &ubuntuMainline{}
 }
 
 // ubuntuGeneric is a driverkit target.
@@ -30,30 +33,15 @@ type ubuntuGeneric struct {
 
 // Script compiles the script to build the kernel module and/or the eBPF probe.
 func (v ubuntuGeneric) Script(c Config) (string, error) {
-	sh, err := getUbuntuShellTemplate()
-	if err != nil {
-		return "", err
-	}
 	t := template.New(string(TargetTypeUbuntuGeneric))
-	parsed, err := t.Parse(sh)
+	parsed, err := t.Parse(ubuntuTemplate)
 	if err != nil {
 		return "", err
 	}
-
-	urls := []string{}
-	var kr kernelrelease.KernelRelease
-
-	if os.Getenv("DRIVERKIT_HEADERS_FROM_MAINLINE") == "" {
-		kr = kernelrelease.FromString(c.Build.KernelRelease)
-		urls, err = ubuntuGenericHeadersURLFromRelease(kr, c.Build.KernelVersion)
-		if len(urls) != 2 {
-			return "", fmt.Errorf("specific kernel headers not found")
-		}
-	} else {
-		urls, kr, err = ubuntuGenericHeadersURLFromMainline(c.Build.KernelRelease)
-		if err != nil {
-			return "", err
-		}
+	kr := kernelrelease.FromString(c.Build.KernelRelease)
+	urls, err := ubuntuGenericHeadersURLFromRelease(kr, c.Build.KernelVersion)
+	if len(urls) != 2 {
+		return "", fmt.Errorf("specific kernel headers not found")
 	}
 
 	td := ubuntuTemplateData{
@@ -85,12 +73,8 @@ type ubuntuAWS struct {
 
 // Script compiles the script to build the kernel module and/or the eBPF probe.
 func (v ubuntuAWS) Script(c Config) (string, error) {
-	sh, err := getUbuntuShellTemplate()
-	if err != nil {
-		return "", err
-	}
 	t := template.New(string(TargetTypeUbuntuGeneric))
-	parsed, err := t.Parse(sh)
+	parsed, err := t.Parse(ubuntuTemplate)
 	if err != nil {
 		return "", err
 	}
@@ -306,17 +290,6 @@ type ubuntuTemplateData struct {
 	BuildProbe           bool
 	BuildModule          bool
 	GCCVersion           string
-}
-
-func getUbuntuShellTemplate() (string, error) {
-	if os.Getenv("DRIVERKIT_UBUNTU_TEMPLATE_PATH") != "" {
-		tmpl, err := ioutil.ReadFile(os.Getenv("DRIVERKIT_UBUNTU_TEMPLATE_PATH"))
-		if err != nil {
-			return "", err
-		}
-		return string(tmpl), nil
-	}
-	return ubuntuTemplate, nil
 }
 
 const ubuntuTemplate = `
