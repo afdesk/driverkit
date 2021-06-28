@@ -56,15 +56,12 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 
 	driverName := "falco"
 	deviceName := "falco"
-	builderImage := builderBaseImage
-
 	isDefault := true
-
-	if os.Getenv("DRIVERKIT_BUILDER_IMAGE") != "" {
+	if  b.BuilderImage != "" {
 		isDefault = false
 		driverName = "custom"
 		deviceName = "custom"
-		builderImage = os.Getenv("DRIVERKIT_BUILDER_IMAGE")
+		builderBaseImage = b.BuilderImage
 	}
 	// create a builder based on the choosen build type
 	v, err := builder.Factory(b.TargetType)
@@ -113,9 +110,9 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	ctx := context.Background()
 	ctx = signals.WithStandardSignals(ctx)
 
-	if _, _, err = cli.ImageInspectWithRaw(ctx, builderImage); client.IsErrNotFound(err) {
-		logger.WithField("image", builderImage).Debug("pulling builder image")
-		pullRes, err := cli.ImagePull(ctx, builderImage, types.ImagePullOptions{})
+	if _, _, err = cli.ImageInspectWithRaw(ctx, builderBaseImage); client.IsErrNotFound(err) {
+		logger.WithField("image", builderBaseImage).Debug("pulling builder image")
+		pullRes, err := cli.ImagePull(ctx, builderBaseImage, types.ImagePullOptions{})
 		if err != nil {
 			return err
 		}
@@ -129,7 +126,7 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	containerCfg := &container.Config{
 		Tty:   true,
 		Cmd:   []string{"/bin/sleep", strconv.Itoa(bp.timeout)},
-		Image: builderImage,
+		Image: builderBaseImage,
 	}
 
 	hostCfg := &container.HostConfig{
