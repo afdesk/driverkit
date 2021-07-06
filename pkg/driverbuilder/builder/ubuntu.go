@@ -18,9 +18,13 @@ const TargetTypeUbuntuGeneric Type = "ubuntu-generic"
 // TargetTypeUbuntuAWS identifies the UbuntuAWS target.
 const TargetTypeUbuntuAWS Type = "ubuntu-aws"
 
+// TargetTypeUbuntuMainline identifies the UbuntuAWS target.
+const TargetTypeUbuntuMainline Type = "ubuntu-mainline"
+
 func init() {
 	BuilderByTarget[TargetTypeUbuntuGeneric] = &ubuntuGeneric{}
 	BuilderByTarget[TargetTypeUbuntuAWS] = &ubuntuAWS{}
+	BuilderByTarget[TargetTypeUbuntuMainline] = &ubuntuMainline{}
 }
 
 // ubuntuGeneric is a driverkit target.
@@ -34,9 +38,7 @@ func (v ubuntuGeneric) Script(c Config) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	kr := kernelrelease.FromString(c.Build.KernelRelease)
-
 	urls, err := ubuntuGenericHeadersURLFromRelease(kr, c.Build.KernelVersion)
 	if len(urls) != 2 {
 		return "", fmt.Errorf("specific kernel headers not found")

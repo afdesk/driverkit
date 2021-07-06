@@ -54,43 +54,58 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 		return err
 	}
 
+	driverName := "falco"
+	deviceName := "falco"
+	isDefault := true
+	if  b.BuilderImage != "" {
+		isDefault = false
+		driverName = "custom"
+		deviceName = "custom"
+		builderBaseImage = b.BuilderImage
+	}
 	// create a builder based on the choosen build type
 	v, err := builder.Factory(b.TargetType)
 	if err != nil {
 		return err
 	}
 	c := builder.Config{
-		DriverName:      "falco",
-		DeviceName:      "falco",
+		DriverName:      driverName,
+		DeviceName:      deviceName,
 		DownloadBaseURL: "https://github.com/falcosecurity/libs/archive",
 		Build:           b,
 	}
-
 	// Generate the build script from the builder
 	res, err := v.Script(c)
 	if err != nil {
 		return err
 	}
-
-	// Prepare driver config template
-	bufDriverConfig := bytes.NewBuffer(nil)
-	err = renderDriverConfig(bufDriverConfig, driverConfigData{DriverVersion: c.DriverVersion, DriverName: c.DriverName, DeviceName: c.DeviceName})
-	if err != nil {
-		return err
+	files := []dockerCopyFile{
+		{"/driverkit/driverkit.sh", res},
 	}
 
-	// Prepare makefile template
-	bufMakefile := bytes.NewBuffer(nil)
-	err = renderMakefile(bufMakefile, makefileData{ModuleName: c.DriverName, ModuleBuildDir: builder.DriverDirectory})
-	if err != nil {
-		return err
-	}
+	if isDefault {
+		// Prepare driver config template
+		bufDriverConfig := bytes.NewBuffer(nil)
+		err = renderDriverConfig(bufDriverConfig, driverConfigData{DriverVersion: c.DriverVersion, DriverName: c.DriverName, DeviceName: c.DeviceName})
+		if err != nil {
+			return err
+		}
+		files = append(files, dockerCopyFile{"/driverkit/module-driver-config.h", bufDriverConfig.String()})
 
-	configDecoded, err := base64.StdEncoding.DecodeString(b.KernelConfigData)
-	if err != nil {
-		return err
-	}
+		// Prepare makefile template
+		bufMakefile := bytes.NewBuffer(nil)
+		err = renderMakefile(bufMakefile, makefileData{ModuleName: c.DriverName, ModuleBuildDir: builder.DriverDirectory})
+		if err != nil {
+			return err
+		}
+		files = append(files, dockerCopyFile{"/driverkit/module-Makefile", bufMakefile.String()})
 
+		configDecoded, err := base64.StdEncoding.DecodeString(b.KernelConfigData)
+		if err != nil {
+			return err
+		}
+		files = append(files, dockerCopyFile{"/driverkit/kernel.config", string(configDecoded)})
+	}
 	// Create the container
 	ctx := context.Background()
 	ctx = signals.WithStandardSignals(ctx)
@@ -115,7 +130,7 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	}
 
 	hostCfg := &container.HostConfig{
-		AutoRemove: true,
+		AutoRemove: false,
 	}
 	networkCfg := &network.NetworkingConfig{}
 	uid := uuid.NewUUID()
@@ -139,13 +154,6 @@ func (bp *DockerBuildProcessor) Start(b *builder.Build) error {
 	err = cli.ContainerStart(ctx, cdata.ID, types.ContainerStartOptions{})
 	if err != nil {
 		return err
-	}
-
-	files := []dockerCopyFile{
-		{"/driverkit/driverkit.sh", res},
-		{"/driverkit/kernel.config", string(configDecoded)},
-		{"/driverkit/module-Makefile", bufMakefile.String()},
-		{"/driverkit/module-driver-config.h", bufDriverConfig.String()},
 	}
 
 	var buf bytes.Buffer
