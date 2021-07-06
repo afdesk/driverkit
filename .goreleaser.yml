@@ -1,18 +1,25 @@
 project_name: driverkit
 builds:
-  - id: "driverkit"
+  - id: driverkit
     goos:
     - linux
     goarch:
     - amd64
-    main: .
-    flags:
-      - -v 
-      - "-tags={{ .Env.GOTAGS }}"
-    ldflags: 
-      - "{{.Env.LDFLAGS}}"
+    main: ./main.go
     binary: driverkit
 
-release:
-  github:
-  prerelease: auto
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    builds:
+      - driverkit
+    replacements:
+      amd64: x86_64
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^test'
